@@ -1,0 +1,36 @@
+RETRO DIMENSIONS ASSET LICENSE
+
+PSX Texture Cruncher
+Copyright © Retro Dimensions
+
+PURMITTED USE
+
+You may use PSX Texture Cruncher and textures created using it in personal and commercial projects.
+
+You may modify the included scripts and assets for use within your own projects.
+
+You may use processed textures created with PSX Texture Cruncher in games, applications, videos, renders and other commercial or non-commercial projects.
+
+RESTRICTIONS
+
+You may not redistribute, resell, sublicense or share PSX Texture Cruncher, its source code, or its included assets as a standalone product or part of another asset pack.
+
+You may not make the original or modified PSX Texture Cruncher source files available for download or resale.
+
+You may not claim the PSX Texture Cruncher source code or included Retro Dimensions assets as your own product.
+
+TEAM USE
+
+The asset may be used by members of a development team working on the same project. It may not be redistributed outside that project or organisation.
+
+OUTPUT OWNERSHIP
+
+Textures processed using PSX Texture Cruncher remain subject to the rights and licences of their original source textures.
+
+Retro Dimensions claims no ownership over user-created output produced using the tool.
+
+WARRANTY
+
+This asset is provided as-is without warranty. Retro Dimensions is not responsible for data loss, project damage or other issues resulting from its use.
+
+Retro Dimensions

@@ -12,6 +12,133 @@ public static class PSXTextureProcessor
         { 15,  7, 13,  5 }
     };
 
+    // ---------------------------------------------------------
+    // PREVIEW
+    // ---------------------------------------------------------
+
+    public static Texture2D CreateReadableCopy(Texture2D source)
+    {
+        if (source == null)
+            return null;
+
+        string sourcePath = AssetDatabase.GetAssetPath(source);
+
+        if (string.IsNullOrEmpty(sourcePath))
+            return null;
+
+        TextureImporter importer =
+            AssetImporter.GetAtPath(sourcePath) as TextureImporter;
+
+        if (importer == null)
+            return null;
+
+        bool originalReadable = importer.isReadable;
+
+        try
+        {
+            if (!originalReadable)
+            {
+                importer.isReadable = true;
+                importer.SaveAndReimport();
+            }
+
+            Texture2D readableSource =
+                AssetDatabase.LoadAssetAtPath<Texture2D>(sourcePath);
+
+            if (readableSource == null)
+                return null;
+
+            Texture2D copy = new Texture2D(
+                readableSource.width,
+                readableSource.height,
+                TextureFormat.RGBA32,
+                false
+            );
+
+            copy.SetPixels32(readableSource.GetPixels32());
+            copy.Apply(false, false);
+
+            return copy;
+        }
+        finally
+        {
+            TextureImporter restoreImporter =
+                AssetImporter.GetAtPath(sourcePath) as TextureImporter;
+
+            if (restoreImporter != null &&
+                restoreImporter.isReadable != originalReadable)
+            {
+                restoreImporter.isReadable = originalReadable;
+                restoreImporter.SaveAndReimport();
+            }
+        }
+    }
+
+    public static Texture2D GeneratePreview(
+        Texture2D readableSource,
+        int maxTextureSize,
+        int paletteColours,
+        bool useDithering,
+        float ditherStrength,
+        float brightness,
+        float contrast,
+        float saturation)
+    {
+        if (readableSource == null)
+            return null;
+
+        Color32[] sourcePixels =
+            readableSource.GetPixels32();
+
+        CalculateOutputSize(
+            readableSource.width,
+            readableSource.height,
+            maxTextureSize,
+            out int outputWidth,
+            out int outputHeight
+        );
+
+        Color32[] resizedPixels =
+            ResizeNearestNeighbour(
+                sourcePixels,
+                readableSource.width,
+                readableSource.height,
+                outputWidth,
+                outputHeight
+            );
+
+        Color32[] processedPixels =
+            ProcessPixels(
+                resizedPixels,
+                outputWidth,
+                outputHeight,
+                paletteColours,
+                useDithering,
+                ditherStrength,
+                brightness,
+                contrast,
+                saturation
+            );
+
+        Texture2D preview = new Texture2D(
+            outputWidth,
+            outputHeight,
+            TextureFormat.RGBA32,
+            false
+        );
+
+        preview.filterMode = FilterMode.Point;
+
+        preview.SetPixels32(processedPixels);
+        preview.Apply(false, false);
+
+        return preview;
+    }
+
+    // ---------------------------------------------------------
+    // SAVE
+    // ---------------------------------------------------------
+
     public static Texture2D ProcessAndSave(
         Texture2D source,
         int maxTextureSize,
@@ -29,7 +156,8 @@ public static class PSXTextureProcessor
         if (source == null)
             return null;
 
-        string sourcePath = AssetDatabase.GetAssetPath(source);
+        string sourcePath =
+            AssetDatabase.GetAssetPath(source);
 
         if (string.IsNullOrEmpty(sourcePath) ||
             !sourcePath.StartsWith("Assets/"))
@@ -41,77 +169,44 @@ public static class PSXTextureProcessor
             return null;
         }
 
-        TextureImporter sourceImporter =
-            AssetImporter.GetAtPath(sourcePath) as TextureImporter;
+        Texture2D readableCopy =
+            CreateReadableCopy(source);
 
-        if (sourceImporter == null)
+        if (readableCopy == null)
             return null;
 
-        bool originalReadable = sourceImporter.isReadable;
+        Texture2D processedTexture = null;
 
         try
         {
-            // Temporarily enable Read/Write on source.
-            if (!originalReadable)
-            {
-                sourceImporter.isReadable = true;
-                sourceImporter.SaveAndReimport();
+            processedTexture =
+                GeneratePreview(
+                    readableCopy,
+                    maxTextureSize,
+                    paletteColours,
+                    useDithering,
+                    ditherStrength,
+                    brightness,
+                    contrast,
+                    saturation
+                );
 
-                source = AssetDatabase.LoadAssetAtPath<Texture2D>(sourcePath);
-            }
+            if (processedTexture == null)
+                return null;
 
-            Color32[] sourcePixels = source.GetPixels32();
+            string outputPath =
+                GetOutputPath(sourcePath);
 
-            CalculateOutputSize(
-                source.width,
-                source.height,
-                maxTextureSize,
-                out int outputWidth,
-                out int outputHeight
-            );
+            byte[] pngData =
+                processedTexture.EncodeToPNG();
 
-            Color32[] resizedPixels = ResizeNearestNeighbour(
-                sourcePixels,
-                source.width,
-                source.height,
-                outputWidth,
-                outputHeight
-            );
-
-            Color32[] processedPixels = ProcessPixels(
-                resizedPixels,
-                outputWidth,
-                outputHeight,
-                paletteColours,
-                useDithering,
-                ditherStrength,
-                brightness,
-                contrast,
-                saturation
-            );
-
-            Texture2D processedTexture = new Texture2D(
-                outputWidth,
-                outputHeight,
-                TextureFormat.RGBA32,
-                false
-            );
-
-            processedTexture.SetPixels32(processedPixels);
-            processedTexture.Apply(false, false);
-
-            string outputPath = GetOutputPath(sourcePath);
-
-            byte[] pngData = processedTexture.EncodeToPNG();
-
-            string absoluteOutputPath = Path.GetFullPath(outputPath);
+            string absoluteOutputPath =
+                Path.GetFullPath(outputPath);
 
             File.WriteAllBytes(
                 absoluteOutputPath,
                 pngData
             );
-
-            Object.DestroyImmediate(processedTexture);
 
             AssetDatabase.ImportAsset(
                 outputPath,
@@ -127,22 +222,31 @@ public static class PSXTextureProcessor
                 disableCompression
             );
 
-            return AssetDatabase.LoadAssetAtPath<Texture2D>(outputPath);
+            return AssetDatabase.LoadAssetAtPath<Texture2D>(
+                outputPath
+            );
         }
         finally
         {
-            // Put the original texture back exactly as it was.
-            TextureImporter restoreImporter =
-                AssetImporter.GetAtPath(sourcePath) as TextureImporter;
-
-            if (restoreImporter != null &&
-                restoreImporter.isReadable != originalReadable)
+            if (readableCopy != null)
             {
-                restoreImporter.isReadable = originalReadable;
-                restoreImporter.SaveAndReimport();
+                Object.DestroyImmediate(
+                    readableCopy
+                );
+            }
+
+            if (processedTexture != null)
+            {
+                Object.DestroyImmediate(
+                    processedTexture
+                );
             }
         }
     }
+
+    // ---------------------------------------------------------
+    // RESOLUTION
+    // ---------------------------------------------------------
 
     private static void CalculateOutputSize(
         int width,
@@ -151,7 +255,8 @@ public static class PSXTextureProcessor
         out int outputWidth,
         out int outputHeight)
     {
-        if (width <= maxSize && height <= maxSize)
+        if (width <= maxSize &&
+            height <= maxSize)
         {
             outputWidth = width;
             outputHeight = height;
@@ -182,33 +287,54 @@ public static class PSXTextureProcessor
         int targetHeight)
     {
         Color32[] output =
-            new Color32[targetWidth * targetHeight];
+            new Color32[
+                targetWidth *
+                targetHeight
+            ];
 
-        for (int y = 0; y < targetHeight; y++)
+        for (int y = 0;
+             y < targetHeight;
+             y++)
         {
             int sourceY = Mathf.Min(
                 sourceHeight - 1,
                 Mathf.FloorToInt(
-                    (float)y / targetHeight * sourceHeight
+                    (float)y /
+                    targetHeight *
+                    sourceHeight
                 )
             );
 
-            for (int x = 0; x < targetWidth; x++)
+            for (int x = 0;
+                 x < targetWidth;
+                 x++)
             {
                 int sourceX = Mathf.Min(
                     sourceWidth - 1,
                     Mathf.FloorToInt(
-                        (float)x / targetWidth * sourceWidth
+                        (float)x /
+                        targetWidth *
+                        sourceWidth
                     )
                 );
 
-                output[y * targetWidth + x] =
-                    sourcePixels[sourceY * sourceWidth + sourceX];
+                output[
+                    y * targetWidth + x
+                ] =
+                    sourcePixels[
+                        sourceY *
+                        sourceWidth +
+                        sourceX
+                    ];
             }
         }
 
         return output;
     }
+
+    // ---------------------------------------------------------
+    // COLOUR PROCESSING
+    // ---------------------------------------------------------
 
     private static Color32[] ProcessPixels(
         Color32[] pixels,
@@ -221,7 +347,8 @@ public static class PSXTextureProcessor
         float contrast,
         float saturation)
     {
-        Color32[] output = new Color32[pixels.Length];
+        Color32[] output =
+            new Color32[pixels.Length];
 
         GetPaletteBits(
             paletteColours,
@@ -230,69 +357,100 @@ public static class PSXTextureProcessor
             out int blueBits
         );
 
-        int redLevels = 1 << redBits;
-        int greenLevels = 1 << greenBits;
-        int blueLevels = 1 << blueBits;
+        int redLevels =
+            1 << redBits;
 
-        for (int y = 0; y < height; y++)
+        int greenLevels =
+            1 << greenBits;
+
+        int blueLevels =
+            1 << blueBits;
+
+        for (int y = 0;
+             y < height;
+             y++)
         {
-            for (int x = 0; x < width; x++)
+            for (int x = 0;
+                 x < width;
+                 x++)
             {
-                int index = y * width + x;
+                int index =
+                    y * width + x;
 
-                Color colour = pixels[index];
+                Color colour =
+                    pixels[index];
 
-                float originalAlpha = colour.a;
+                float originalAlpha =
+                    colour.a;
 
-                colour = ApplyColourAdjustments(
-                    colour,
-                    brightness,
-                    contrast,
-                    saturation
-                );
+                colour =
+                    ApplyColourAdjustments(
+                        colour,
+                        brightness,
+                        contrast,
+                        saturation
+                    );
 
                 if (useDithering)
                 {
                     float bayer =
-                        BayerMatrix[y % 4, x % 4];
+                        BayerMatrix[
+                            y % 4,
+                            x % 4
+                        ];
 
                     float dither =
-                        (bayer / 15f) - 0.5f;
+                        (bayer / 15f) -
+                        0.5f;
 
                     colour.r +=
                         ditherStrength *
                         dither /
-                        Mathf.Max(1, redLevels - 1);
+                        Mathf.Max(
+                            1,
+                            redLevels - 1
+                        );
 
                     colour.g +=
                         ditherStrength *
                         dither /
-                        Mathf.Max(1, greenLevels - 1);
+                        Mathf.Max(
+                            1,
+                            greenLevels - 1
+                        );
 
                     colour.b +=
                         ditherStrength *
                         dither /
-                        Mathf.Max(1, blueLevels - 1);
+                        Mathf.Max(
+                            1,
+                            blueLevels - 1
+                        );
                 }
 
-                colour.r = QuantizeChannel(
-                    colour.r,
-                    redLevels
-                );
+                colour.r =
+                    QuantizeChannel(
+                        colour.r,
+                        redLevels
+                    );
 
-                colour.g = QuantizeChannel(
-                    colour.g,
-                    greenLevels
-                );
+                colour.g =
+                    QuantizeChannel(
+                        colour.g,
+                        greenLevels
+                    );
 
-                colour.b = QuantizeChannel(
-                    colour.b,
-                    blueLevels
-                );
+                colour.b =
+                    QuantizeChannel(
+                        colour.b,
+                        blueLevels
+                    );
 
-                colour.a = originalAlpha;
+                colour.a =
+                    originalAlpha;
 
-                output[index] = colour;
+                output[index] =
+                    colour;
             }
         }
 
@@ -305,43 +463,53 @@ public static class PSXTextureProcessor
         float contrast,
         float saturation)
     {
-        // Brightness
         colour.r += brightness;
         colour.g += brightness;
         colour.b += brightness;
 
-        // Contrast
         colour.r =
-            (colour.r - 0.5f) * contrast + 0.5f;
+            (colour.r - 0.5f) *
+            contrast +
+            0.5f;
 
         colour.g =
-            (colour.g - 0.5f) * contrast + 0.5f;
+            (colour.g - 0.5f) *
+            contrast +
+            0.5f;
 
         colour.b =
-            (colour.b - 0.5f) * contrast + 0.5f;
+            (colour.b - 0.5f) *
+            contrast +
+            0.5f;
 
-        // Saturation
         float luminance =
             colour.r * 0.2126f +
             colour.g * 0.7152f +
             colour.b * 0.0722f;
 
-        Color grey = new Color(
-            luminance,
-            luminance,
-            luminance,
-            colour.a
-        );
+        Color grey =
+            new Color(
+                luminance,
+                luminance,
+                luminance,
+                colour.a
+            );
 
-        colour = Color.LerpUnclamped(
-            grey,
-            colour,
-            saturation
-        );
+        colour =
+            Color.LerpUnclamped(
+                grey,
+                colour,
+                saturation
+            );
 
-        colour.r = Mathf.Clamp01(colour.r);
-        colour.g = Mathf.Clamp01(colour.g);
-        colour.b = Mathf.Clamp01(colour.b);
+        colour.r =
+            Mathf.Clamp01(colour.r);
+
+        colour.g =
+            Mathf.Clamp01(colour.g);
+
+        colour.b =
+            Mathf.Clamp01(colour.b);
 
         return colour;
     }
@@ -350,7 +518,8 @@ public static class PSXTextureProcessor
         float value,
         int levels)
     {
-        value = Mathf.Clamp01(value);
+        value =
+            Mathf.Clamp01(value);
 
         return Mathf.Round(
             value * (levels - 1)
@@ -390,7 +559,6 @@ public static class PSXTextureProcessor
                 break;
 
             default:
-                // 256 colours
                 redBits = 3;
                 greenBits = 3;
                 blueBits = 2;
@@ -398,22 +566,34 @@ public static class PSXTextureProcessor
         }
     }
 
+    // ---------------------------------------------------------
+    // OUTPUT
+    // ---------------------------------------------------------
+
     private static string GetOutputPath(
         string sourcePath)
     {
         string directory =
-            Path.GetDirectoryName(sourcePath);
+            Path.GetDirectoryName(
+                sourcePath
+            );
 
         if (directory != null)
         {
             directory =
-                directory.Replace("\\", "/");
+                directory.Replace(
+                    "\\",
+                    "/"
+                );
         }
 
         string fileName =
-            Path.GetFileNameWithoutExtension(sourcePath);
+            Path.GetFileNameWithoutExtension(
+                sourcePath
+            );
 
-        return directory + "/" +
+        return directory +
+               "/" +
                fileName +
                "_PSX.png";
     }
@@ -427,27 +607,32 @@ public static class PSXTextureProcessor
         bool disableCompression)
     {
         TextureImporter importer =
-            AssetImporter.GetAtPath(outputPath)
-            as TextureImporter;
+            AssetImporter.GetAtPath(
+                outputPath
+            ) as TextureImporter;
 
         if (importer == null)
             return;
 
-        importer.maxTextureSize = maxTextureSize;
+        importer.maxTextureSize =
+            maxTextureSize;
 
         if (usePointFiltering)
         {
-            importer.filterMode = FilterMode.Point;
+            importer.filterMode =
+                FilterMode.Point;
         }
 
         if (disableMipmaps)
         {
-            importer.mipmapEnabled = false;
+            importer.mipmapEnabled =
+                false;
         }
 
         if (disableAnisotropicFiltering)
         {
-            importer.anisoLevel = 0;
+            importer.anisoLevel =
+                0;
         }
 
         if (disableCompression)
@@ -455,7 +640,8 @@ public static class PSXTextureProcessor
             importer.textureCompression =
                 TextureImporterCompression.Uncompressed;
 
-            importer.crunchedCompression = false;
+            importer.crunchedCompression =
+                false;
         }
 
         importer.SaveAndReimport();

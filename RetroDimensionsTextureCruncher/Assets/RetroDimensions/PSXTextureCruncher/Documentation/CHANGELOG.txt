@@ -1,0 +1,39 @@
+PSX TEXTURE CRUNCHER
+Retro Dimensions
+
+VERSION 1.0.0
+
+Initial Release
+
+- Batch PSX-style texture processing
+- Non-destructive texture output
+- Automatic _PSX output copies
+- Drag-and-drop texture workflow
+- Whole-folder processing
+- Optional recursive subfolder processing
+- Live Original / Crunched preview
+- Large texture preview
+- Resolution reduction
+- Colour palette reduction
+- Ordered dithering
+- Adjustable dithering strength
+- Brightness adjustment
+- Contrast adjustment
+- Saturation adjustment
+- Point filtering
+- Mipmap control
+- Anisotropic filtering control
+- Texture compression control
+- PS1 Standard preset
+- PS1 Horror preset
+- PS1 Colourful preset
+- Extremely Low-Fi preset
+- Custom preset support
+- Saveable preset assets
+- Existing output protection
+- Restore default settings
+- Retro Dimensions editor interface
+- Demo scene
+- Documentation
+
+Designed for Unity 6.
